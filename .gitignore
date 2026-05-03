@@ -1,0 +1,47 @@
+# Test e VA (esclusi dalla repo istituzionale)
+/tests
+va-*.sh
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Corpus privato guardrail (NON pubblicare)
+guardrail-service/corpus_custom.json
+guardrail-service/corpus_dynamic.json
+guardrail-service/corpus_dynamic_backup.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build
+dist/
+build/
+.vite/
+
+# Backup e temp
+*.bak
+*.tmp
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Logs
+*.log
+logs/
+
+# Docker volumes locali
+data/
+volumes/

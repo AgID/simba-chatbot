@@ -1,0 +1,199 @@
+# ── Log rotation policy (YAML anchors) ──────────────────────────────────────
+# Limita lo spazio occupato dai log Docker su disco. Senza questi blocchi,
+# i file json-log crescerebbero indefinitamente.
+#   standard: 30MB max per container (10MB × 3 file rotanti)
+#   ollama:   60MB max (20MB × 3) — loggaa di più durante pull modelli
+x-logging-default: &logging-default
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-logging-ollama: &logging-ollama
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+
+  # ── Ollama locale (solo se usi --profile ollama-local) ──────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    profiles:
+      - ollama-local
+    expose:
+      - "11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: 24h
+      # Numero di richieste concorrenti gestite in parallelo da Ollama.
+      # Ogni slot aggiunge ~500MB RAM. Vincolo CPU: modelli piccoli (0.5b) usano
+      # 1 core/slot, modelli grandi (1.7b+) possono saturare tutti i core anche
+      # con 1 solo slot. Tunare in base al profilo modelli + core disponibili.
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+    logging: *logging-ollama
+
+  # ── Ollama model puller (solo con profile ollama-local) ─────────────────────
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: ollama-pull
+    profiles:
+      - ollama-local
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "sleep 5 && ollama pull ${OLLAMA_MODEL:-qwen2.5:0.5b} && echo 'Modello pronto'"]
+    restart: "no"
+    logging: *logging-default
+
+  # ── Validatore CSV MCP (NUOVO) ──────────────────────────────────────────────
+  validatore-mcp:
+    build:
+      context: ./validatore-mcp
+      dockerfile: Dockerfile
+    container_name: validatore-mcp
+    restart: unless-stopped
+    expose:
+      - "3002"
+    logging: *logging-default
+
+  # ── RDF MCP — CSV to RDF/TTL ────────────────────────────────────────────────
+  rdf-mcp:
+    build:
+      context: ./rdf-mcp
+      dockerfile: Dockerfile
+    container_name: rdf-mcp
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "3003"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    healthcheck:
+      # Qualsiasi risposta HTTP (anche 400/500) significa che il server ascolta:
+      # rdf-mcp è un proxy catch-all al worker Cloudflare, 'GET /' senza param
+      # torna 4xx legittimamente — ma solo se Node è up e loadWorker() è completato.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3003/').then(() => process.exit(0)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    logging: *logging-default
+
+  # ── Backend Node.js ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./ckan-chat/backend
+      dockerfile: Dockerfile
+    container_name: ckan-chat-backend
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-3001}:3001"
+    environment:
+      PORT: 3001
+      SERVER_IP: ${SERVER_IP:-localhost}
+      MCP_URL_VALIDATORE: http://validatore-mcp:3002/mcp
+      MCP_URL_RDF: http://rdf-mcp:3003
+      LLM_PROVIDER: ${LLM_PROVIDER:-mistral}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      MISTRAL_MODEL: ${MISTRAL_MODEL:-mistral-small-latest}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b}
+      # Modello separato per intent classifier (opzionale, uso avanzato).
+      # Utile se OLLAMA_MODEL è un modello grande (1.7b+) per chat libere e si
+      # vuole un classifier più veloce. Se vuoto, classifier usa OLLAMA_MODEL.
+      OLLAMA_INTENT_MODEL: ${OLLAMA_INTENT_MODEL:-}
+      OLLAMA_API_KEY: ${OLLAMA_API_KEY:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      ANALYTICS_URL: http://analytics-service:3004
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-changeme-admin}
+      BLOCKLIST_PATH: /app/data/blocklist.json
+      GUARDRAIL_URL: http://guardrail-service:8000
+      SPARQL_ENDPOINT: ${SPARQL_ENDPOINT:-https://lod.dati.gov.it/sparql}
+      # Load test bypass (lasciare vuoto in produzione)
+      LOADTEST_BYPASS_IP: ${LOADTEST_BYPASS_IP:-}
+    volumes:
+      - blocklist_data:/app/data
+    depends_on:
+      validatore-mcp:
+        condition: service_started
+      rdf-mcp:
+        condition: service_healthy
+    logging: *logging-default
+
+  # ── Frontend React ──────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./ckan-chat/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL:-}
+        VITE_BASE_PATH: /chatbot/
+        VITE_ANALYTICS_URL: ${VITE_ANALYTICS_URL:-}
+        VITE_ANALYTICS_TOKEN: ${VITE_ANALYTICS_TOKEN:-changeme}
+        VITE_ADMIN_TOKEN: ${VITE_ADMIN_TOKEN:-changeme-admin}
+        VITE_SPARQL_ENDPOINT: ${SPARQL_ENDPOINT:-}
+    container_name: ckan-chat-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      - backend
+    logging: *logging-default
+
+  # ── Analytics Service ───────────────────────────────────────────────────────
+  guardrail-service:
+    build:
+      context: ./guardrail-service
+      dockerfile: Dockerfile
+    container_name: guardrail-service
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-changeme-admin}
+      DB_PATH: /app/data/guardrail.db
+      TOXICITY_THRESHOLD: ${TOXICITY_THRESHOLD:-0.85}
+      SIMILARITY_THRESHOLD: ${SIMILARITY_THRESHOLD:-0.78}
+    volumes:
+      - guardrail_data:/app/data
+    logging: *logging-default
+
+  analytics-service:
+    build:
+      context: ./analytics-service
+      dockerfile: Dockerfile
+    container_name: analytics-service
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3004:3004"
+    environment:
+      PORT: 3004
+      CHATBOT_ORIGIN: ${CHATBOT_ORIGIN:?CHATBOT_ORIGIN deve essere definita in .env (es. https://tuo-dominio.it)}
+      ANALYTICS_TOKEN: ${ANALYTICS_TOKEN:-changeme}
+      SQLITE_PATH: /app/data/analytics.db
+    volumes:
+      - analytics_data:/app/data
+    depends_on:
+      - backend
+    logging: *logging-default
+
+volumes:
+  blocklist_data:
+  ollama_data:
+  analytics_data:
+  guardrail_data:
