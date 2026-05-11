@@ -30,7 +30,7 @@
   --gray-900:      #17324d;
   --text:          #17324d;
   --text2:         #5c6f82;
-  --text3:         #6b8fa8;
+  --text3:         #455a72;
   --error:         #cc334d;
   --success:       #008758;
   --border:        #d9e4ef;
@@ -1451,7 +1451,7 @@ body {
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
 }
 .tour-btn-skip {
-  font-size: 11px; color: #8898a9; background: none; border: none;
+  font-size: 11px; color: #5c6f82; background: none; border: none;
   cursor: pointer; padding: 0; text-decoration: underline;
   font-family: 'Titillium Web', sans-serif;
 }
