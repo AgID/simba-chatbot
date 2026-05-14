@@ -1298,8 +1298,10 @@ SELECT ?ipaCode WHERE {
       {showPrivacy && (
         <div className="privacy-banner">
           <span>
-            Questo servizio raccoglie dati anonimi sull'utilizzo (query, sessione, IP parziale) per migliorare il servizio.
-            Nessun dato personale identificabile viene conservato.
+            Questo servizio raccoglie dati anonimi sull'utilizzo (testo della ricerca,
+            identificativo di sessione, latenze) per migliorare il servizio.
+            Le ricerche non sono associate a indirizzi IP né a identificativi personali.
+            Maggiori informazioni: <a href="https://www.dati.gov.it/policy" target="_blank" rel="noopener noreferrer">Informativa privacy AgID</a>.
           </span>
           <button onClick={() => { localStorage.setItem("privacy_ok", "1"); setShowPrivacy(false); }}>
             Ho capito ✕
