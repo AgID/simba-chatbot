@@ -41,5 +41,6 @@ PY=/usr/bin/python3
   --logs /var/log/nginx/chatbot.access.log \
   --out /var/www/simba-stats \
   --istat-names /var/www/simba-stats/istat-names.json \
+  --title "SIMBA Chatbot" \
   >> /var/log/cruscotto-stats/cron-hourly-simba.log 2>&1 \
   && /bin/chown -R www-data:www-data /var/www/simba-stats
