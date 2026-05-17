@@ -1337,8 +1337,8 @@ SELECT ?ipaCode WHERE {
         {/* Link strumenti — testo semplice */}
         <div id="sidebar-tools" className="sidebar-section">
           <div className="section-label">Strumenti consigliati</div>
-          <a className="sidebar-plain-link" href="https://piersoft.github.io/CSV-to-RDF/" target="_blank" rel="noopener noreferrer">
-            CSV to RDF completo <span className="plain-tag plain-tag-agid">AgID</span>
+          <a className="sidebar-plain-link" href="https://cruscotto-italia.dati.gov.it/" target="_blank" rel="noopener noreferrer">
+            Cruscotto Italia <span className="plain-tag plain-tag-agid">AgID</span>
           </a>
           <a className="sidebar-plain-link" href="https://github.com/piersoft/opendata-pa-quality-audit" target="_blank" rel="noopener noreferrer">
             Tool validazione CSV massivo <span className="plain-tag plain-tag-agid">AgID</span>
