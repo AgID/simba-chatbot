@@ -54,7 +54,7 @@ export default function AdminPanel() {
   return (
     <div style={{ maxWidth: 700, margin: "40px auto", padding: "0 20px", fontFamily: "'Titillium Web', sans-serif" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32, borderBottom: "2px solid #0066cc", paddingBottom: 16 }}>
-        <img src="/chatbot/logo-agid.png" alt="AgID" style={{ height: 36 }} />
+        <a href="https://www.agid.gov.it/it" target="_blank" rel="noopener noreferrer" aria-label="Sito istituzionale AgID (apre in nuova scheda)"><img src="/chatbot/logo-agid.png" alt="AgID — Agenzia per l'Italia Digitale" style={{ height: 36 }} /></a>
         <div>
           <div style={{ fontWeight: 700, fontSize: 18, color: "#17324d" }}>SIMBA — Pannello Admin</div>
           <div style={{ fontSize: 13, color: "#5c6f82" }}>Gestione guardrail contenuti</div>

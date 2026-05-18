@@ -1313,7 +1313,9 @@ SELECT ?ipaCode WHERE {
 
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="sidebar-logo">
-          <img src="/chatbot/logo-agid.png" alt="AgID" className="sidebar-agid-logo" />
+          <a href="https://www.agid.gov.it/it" target="_blank" rel="noopener noreferrer" aria-label="Sito istituzionale AgID (apre in nuova scheda)">
+            <img src="/chatbot/logo-agid.png" alt="AgID — Agenzia per l'Italia Digitale" className="sidebar-agid-logo" />
+          </a>
           <div className="sidebar-agid-title">
             <span className="sidebar-agid-name">SIMBA <span className="sidebar-beta-tag">BETA</span></span>
             <span className="sidebar-agid-sub">Open Data · dati.gov.it</span>
