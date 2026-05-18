@@ -1372,6 +1372,12 @@ SELECT ?ipaCode WHERE {
              aria-label="Codice sorgente su GitHub">
             <i className="bi bi-github" /> GitHub
           </a>
+          <a href="https://cruscotto-italia.dati.gov.it/accessibilita.html"
+             target="_blank" rel="noopener noreferrer"
+             aria-label="Dichiarazione di accessibilità (apre in nuova scheda)"
+             style={{ marginLeft: '12px' }}>
+            Accessibilità
+          </a>
         </div>
       </aside>
 
