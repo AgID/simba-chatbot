@@ -48,50 +48,31 @@ function postProcessOntologie(ontos, headers) {
 /**
  * rdf-mcp — Adapter locale per worker.js CSV-to-RDF
  *
- * Scarica worker.js dalla repo CSV-to-RDF all'avvio (o usa la copia locale).
- * Espone le stesse API dell'endpoint Cloudflare:
+ * Usa la copia locale vendored di worker.js (bundled nel container Docker).
+ * Espone le stesse API dell'endpoint Cloudflare CSV-to-RDF:
  *   GET  /?url=<csv_url>&ipa=<ipa>&pa=<nome>&fmt=<ttl|json|rdfxml>
  *   POST /  (body: text/csv)
  *
- * Si aggiorna automaticamente ogni notte scaricando il worker.js aggiornato.
+ * Per aggiornare worker.js: sostituire il file in rdf-mcp/worker.js e rebuildare il container.
+ * Nessun download runtime da repo esterne (worker.js e' vendored nel codice sorgente).
  */
 
 import express from "express";
 import { createRequire } from "module";
-import { writeFileSync, readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import path from "path";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WORKER_PATH = path.join(__dirname, "worker.js");
-const WORKER_URL  = process.env.WORKER_JS_URL || "https://raw.githubusercontent.com/piersoft/CSV-to-RDF/main/worker.js";
 const PORT        = process.env.PORT || 3003;
-
-// ── Scarica/aggiorna worker.js ───────────────────────────────────────────────
-async function downloadWorker() {
-  try {
-    console.log("[rdf-mcp] Scarico worker.js aggiornato...");
-    const res = await fetch(WORKER_URL, { headers: { "Cache-Control": "no-cache", "Pragma": "no-cache" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    let text = await res.text();
-    // Applica patch: esponi normalizeTTL su globalThis dopo la sua definizione
-    const patch = '\nif(typeof normalizeTTL!==\'undefined\') globalThis.normalizeTTL=normalizeTTL;';
-    text = text.replace('})();\n// ─', '})();' + patch + '\n// ─');
-    writeFileSync(WORKER_PATH, text, "utf-8");
-    console.log(`[rdf-mcp] worker.js aggiornato (${text.length} bytes)`);
-    return true;
-  } catch (e) {
-    console.warn("[rdf-mcp] Impossibile scaricare worker.js:", e.message);
-    return false;
-  }
-}
 
 // ── Carica il worker come modulo Cloudflare Worker emulato ──────────────────
 let workerHandler = null;
 
 async function loadWorker() {
-  // Usa worker.js dalla repo (già patchato con fix normalizeTTL)
-  // Il cron notturno scaricherà aggiornamenti ma riapplica il patch
+  // Usa worker.js vendored nel container (file copiato in build-time dal Dockerfile).
+  // Aggiornamenti: sostituire il file e rebuildare l'immagine.
   if (!existsSync(WORKER_PATH)) {
     console.error("[rdf-mcp] worker.js non disponibile — uscita"); process.exit(1);
   }
@@ -272,17 +253,12 @@ app.use(async (req, res) => {
   }
 });
 
-// ── Aggiornamento notturno disabilitato — gestito da GitHub Action ──────────
-function scheduleNightlyUpdate() { return; }
-
 // ── Avvio ────────────────────────────────────────────────────────────────────
 (async () => {
-  // Usa worker.js dalla repo locale (non scaricare - il file GitHub è transpilato)
-  console.log('[rdf-mcp] Uso worker.js dalla repo locale');
+  console.log('[rdf-mcp] Uso worker.js vendored nel container');
   await loadWorker();
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[rdf-mcp] pronto su http://0.0.0.0:${PORT}`);
     console.log(`[rdf-mcp] Uso: GET http://localhost:${PORT}/?url=<csv_url>&ipa=<ipa>&pa=<nome>`);
-    scheduleNightlyUpdate();
   });
 })();

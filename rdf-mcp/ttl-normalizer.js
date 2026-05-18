@@ -1,6 +1,6 @@
 // ttl-normalizer.js
 // ============================================================================
-// Normalizzatore TTL per piersoft/CSV-to-RDF
+// Normalizzatore TTL per il motore CSV-to-RDF di SIMBA chatbot
 //
 // Post-processor puro (no dipendenze) che ripulisce il TTL generato dal motore
 // deterministico `buildDeterministicTTL` (presente identico in index.html e
@@ -41,7 +41,7 @@
 // Regression test: 53/53 TTL (dei 53 esempi della select in index.html) passano
 // sia parsing Turtle (rdflib) sia validazione semantica contro 30 ontologie
 // OntoPiA ufficiali. Riferimento: corpus fixtures_v9.json + ontology_index.json
-// scaricato da raw.githubusercontent.com/piersoft/CSV-to-RDF/main.
+// vendored nel container (file rdf-mcp/worker.js).
 //
 // USO
 // ---
