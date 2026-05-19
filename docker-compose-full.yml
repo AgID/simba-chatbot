@@ -38,7 +38,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 3G
+          memory: 16G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     logging: *logging-ollama
 
   # ── Ollama model puller (solo con profile ollama-local) ─────────────────────
