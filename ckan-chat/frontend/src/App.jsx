@@ -826,17 +826,22 @@ SELECT ?ipaCode WHERE {
       // query = versione pulita per SPARQL (senza verbi e stopword)
       // displayQuery = testo originale per mostrarlo all'utente
       const displayQuery = text;
-      const queryCleaned = text
+      // STEP 1: estrai "Comune di X" PRIMA del cleanup, altrimenti
+      // il replace /d[ie]/ rimuove la parola "di" da "Comune di Mesagne"
+      // e la regex split non riesce più a fare match.
+      const splitResult = splitQueryAndWhere(text);
+      const where = splitResult.where;
+      // STEP 2: applica il cleanup esistente sulla sola parte cosa
+      // (oppure su tutto il testo se non c'era "Comune di X")
+      const textForCleanup = where ? splitResult.query : text;
+      const query = textForCleanup
         // Rimuovi frasi introduttive comuni + articolazioni su/sul/sulla/sull'/degli ecc.
         .replace(/^(cerca|trovami|mostrami|dammi|elenca|trova|ho bisogno di|mi servono|vorrei|voglio|puoi darmi|puoi trovarmi|sto cercando|cerco|fammi vedere|hai|ci sono|esistono|dove trovo|come trovo)\s+/i, "")
         .replace(/^(dati|informazioni|dataset|statistiche|numeri)\s+(su[gli']?\s*|dell[aeo']?\s*|d[ie]\s+)/i, "")
         .replace(/\s+(su[gli']?|dell[aeo']?|d[ie])\s+/gi, " ")
         .replace(/\b(dataset|open data)\b/gi, "")
         .replace(/[?!.]+$/, "")
-        .replace(/\s+/g, " ").trim() || text;
-      // Estrae "Comune di X" come where (titolare/rightsHolder) e tiene il resto
-      // come q SPARQL. Se nessun "Comune di X" presente, query=full text, where=null.
-      const { query, where } = splitQueryAndWhere(queryCleaned);
+        .replace(/\s+/g, " ").trim() || textForCleanup;
 
       setPageTitle("Ricerca Dataset");
 
