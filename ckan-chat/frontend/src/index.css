@@ -853,6 +853,11 @@ body {
 }
 .plain-tag-agid   { background: #e8f0fe; color: #004D99; }
 .plain-tag-ondata { background: #e8f5ee; color: #006b38; }
+.plain-tag-ondata-agid {
+  background: linear-gradient(90deg, #e8f5ee 0%, #e8f5ee 50%, #e8f0fe 50%, #e8f0fe 100%);
+  color: #004D99;
+  border: 1px solid #d4e4dc;
+}
 
 /* ── Ricerca avanzata ───────────────────────────────────────────────────── */
 .adv-container { border-top: 1px solid var(--border, #ddd); background: #fff; }
