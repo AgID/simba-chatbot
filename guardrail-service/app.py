@@ -154,9 +154,9 @@ def log_decision(prompt: str, decision: str, reason: Optional[str],
 
 # ── Modelli ───────────────────────────────────────────────────────────────────
 def load_models():
-    log.info("Carico toxic-bert...")
-    state.toxicity_tokenizer = AutoTokenizer.from_pretrained("unitary/toxic-bert")
-    state.toxicity_model = AutoModelForSequenceClassification.from_pretrained("unitary/toxic-bert")
+    log.info("Carico hate-ita-xlm-r-large (multilingue, ottimizzato italiano)...")
+    state.toxicity_tokenizer = AutoTokenizer.from_pretrained("MilaNLProc/hate-ita-xlm-r-large")
+    state.toxicity_model = AutoModelForSequenceClassification.from_pretrained("MilaNLProc/hate-ita-xlm-r-large")
     state.toxicity_model.eval()
     log.info("Carico sentence-transformer...")
     state.sim_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
