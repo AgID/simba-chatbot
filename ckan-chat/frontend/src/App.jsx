@@ -69,6 +69,30 @@ function sanitizeSparql(s) {
     .slice(0, 200);                   // limite lunghezza
 }
 
+// Estrae "cosa" e "dove" da una query testuale libera tipo:
+//   "Cerca defibrillatori nel Comune di Mesagne"
+//     -> { query: "defibrillatori", where: "Comune di Mesagne" }
+//   "scuole pubbliche comune di roma" (senza preposizione)
+//     -> { query: "scuole pubbliche", where: "comune di roma" }
+//   "defibrillatori" (solo cosa)
+//     -> { query: "defibrillatori", where: null }
+// Il valore "where" viene poi passato a doSearch() che genera
+// FILTER(LCASE(STR(?rhName)) = "comune di mesagne") nella SPARQL.
+// Caso ambiguo "ristoranti a Mesagne" (toponimo nudo) non viene splittato:
+// resta tutto in query. Stesso per "Provincia di X" / "Regione X".
+function splitQueryAndWhere(text) {
+  const s = (text || "")
+    .replace(/^(cerca|trovami|mostrami|dammi|elenca|mostra|trova|cercami)\s+/i, "")
+    .trim();
+  // Pattern 1: <cosa> + preposizione + "Comune di <nome>"
+  let m = s.match(/^(.+?)\s+(?:nel|del|della|al|nella|presso|a|di|per|in|sul|sulla|su|dal|dalla|alla|allo|nello)\s+(comune\s+di\s+.+?)$/i);
+  if (m) return { query: m[1].trim(), where: m[2].trim() };
+  // Pattern 2: <cosa> + "Comune di <nome>" SENZA preposizione
+  m = s.match(/^(.+?)\s+(comune\s+di\s+.+?)$/i);
+  if (m) return { query: m[1].trim(), where: m[2].trim() };
+  return { query: s, where: null };
+}
+
 
 const TOUR_STEPS = [
   {
@@ -802,7 +826,7 @@ SELECT ?ipaCode WHERE {
       // query = versione pulita per SPARQL (senza verbi e stopword)
       // displayQuery = testo originale per mostrarlo all'utente
       const displayQuery = text;
-      const query = text
+      const queryCleaned = text
         // Rimuovi frasi introduttive comuni + articolazioni su/sul/sulla/sull'/degli ecc.
         .replace(/^(cerca|trovami|mostrami|dammi|elenca|trova|ho bisogno di|mi servono|vorrei|voglio|puoi darmi|puoi trovarmi|sto cercando|cerco|fammi vedere|hai|ci sono|esistono|dove trovo|come trovo)\s+/i, "")
         .replace(/^(dati|informazioni|dataset|statistiche|numeri)\s+(su[gli']?\s*|dell[aeo']?\s*|d[ie]\s+)/i, "")
@@ -810,15 +834,18 @@ SELECT ?ipaCode WHERE {
         .replace(/\b(dataset|open data)\b/gi, "")
         .replace(/[?!.]+$/, "")
         .replace(/\s+/g, " ").trim() || text;
+      // Estrae "Comune di X" come where (titolare/rightsHolder) e tiene il resto
+      // come q SPARQL. Se nessun "Comune di X" presente, query=full text, where=null.
+      const { query, where } = splitQueryAndWhere(queryCleaned);
 
       setPageTitle("Ricerca Dataset");
 
 
       const t0search = Date.now();
-      const { datasets } = await doSearch(query);
+      const { datasets } = await doSearch(query, 0, where);
       emitAnalytics("search", {
         query: query.slice(0, 500),
-        where: null,
+        where: where,
         datasets_found: datasets.length,
         latency_ms: Date.now() - t0search,
       });
