@@ -1091,6 +1091,78 @@ app.post("/api/intent", strictLimiter, async (req, res) => {
     console.log(`[intent] blocked: command injection pattern`);
     return res.status(403).json({ error: "Richiesta non consentita.", reason: "injection" });
   }
+  // Blocca prompt extraction (system prompt leak, env vars, file read)
+  const EXFIL_PATTERNS = [
+    /\b(system|your)\s+(instructions?|prompt|rules)\b/i,
+    /\brepeat\s+(your|the|all)\s*(system|instructions?|prompt)/i,
+    /\b(print|show|reveal|dump|leak|expose|list)\s+(all\s+)?(env(ironment)?|secrets?|tokens?|api[\s_-]?keys?)/i,
+    /\b(read|cat|open|access)\s+.*\/etc\/(passwd|shadow|hosts|sudoers)/i,
+    /\bwhat\s+are\s+your\s+(instructions?|rules|prompts?)/i,
+    /\bprint\s+them\s+in\s+full/i,
+    /\bword\s+by\s+word/i,
+  ];
+  for (const re of EXFIL_PATTERNS) {
+    if (re.test(message)) {
+      console.log(`[intent] blocked: exfiltration pattern (${re.source})`);
+      return res.status(403).json({ error: "Richiesta non consentita.", reason: "exfiltration" });
+    }
+  }
+  // Blocca prompt injection tag/struttura (system override, role hijack, XML injection, RLO unicode)
+  const INJECTION_TAGS = [
+    /\{\{\s*(system|user|assistant)\s*\}\}/i,         // {{system}}, {{user}}, {{assistant}}
+    /\[\s*(system|user|assistant)\s*(override|prompt)?\s*\]/i,  // [SYSTEM OVERRIDE], [SYSTEM]
+    /<\s*\/?\s*(system|user|assistant)\s*>/i,           // <system>, </system>, <user>
+    /\[\s*end\s+override\s*\]/i,                       // [END OVERRIDE]
+    /\bsystem\s+override\b/i,                            // SYSTEM OVERRIDE inline
+    /\bdisabilita\s+(il\s+)?guardrail\b/i,              // disabilita guardrail (IT)
+    /\bnuove\s+istruzioni\s*:\s*ignora/i,               // "nuove istruzioni: ignora"
+    /\bripeti\s+parola\s+per\s+parola\s+le\s+tue/i,   // prompt leak italiano
+    /\bistruzioni\s+di\s+sistema\b/i,                   // istruzioni di sistema (IT)
+    /[\u202A-\u202E\u2066-\u2069]/,                     // Unicode bidi (RLO, LRO, PDF, FSI)
+    /\bjailbreak\b/i,
+  ];
+  for (const re of INJECTION_TAGS) {
+    if (re.test(message)) {
+      console.log(`[intent] blocked: injection tag (${re.source})`);
+      return res.status(403).json({ error: "Richiesta non consentita.", reason: "injection" });
+    }
+  }
+  // ─── PARANOID MODE: filtri tematici verbo+target pericoloso ────────────────
+  // Razionale: questo endpoint /api/intent restituisce solo etichette enum
+  // (SEARCH | VALIDATE | ENRICH | OFF_TOPIC). NON genera testo libero, quindi
+  // anche se un attaccante chiedesse "come costruire un esplosivo" il backend
+  // risponderebbe con SEARCH → query SPARQL → lista dataset PA legittimi
+  // (es. SEVESO, incidenti miniere). Nessun output testuale dell'LLM.
+  //
+  // Questi filtri sono mantenuti come DIFESA IN PROFONDITÀ per:
+  //  - prevenire che query con intent malevolo arrivino al classifier LLM
+  //  - proteggere eventuali future estensioni /api/chat o RAG generativi
+  //  - bloccare il classificatore prima di consumare token Ollama su payload
+  //    ad alto rischio policy AgID (esplosivi, IED, armi NBC)
+  //
+  // Trade-off: 2-4 falsi positivi su query lecite molto specifiche ("dataset
+  // statistici esplosioni miniere storiche"), accettato perché audit-friendly.
+  // Lascia passare "dataset SU esplosivi" ma blocca "come SI COSTRUISCE un esplosivo"
+  const DANGEROUS_VERBS_IT = "(costruire|costruisc|assembl|fabbric|prepar|sintetizz|produrre|produc|fare|fa\\s+un|fa\\s+una|montare|mont|generar|creare|cre[ai]|comporre|component|spiega(re|mi)?\\s+come|come\\s+si\\s+(fa|costruisce|assembla|prepara|produce))";
+  const DANGEROUS_VERBS_EN = "(build|construct|make|prepare|synthesize|assemble|produce|create|how\\s+to\\s+(build|make|construct|assemble|prepare))";
+  const DANGEROUS_TARGETS = "(esplosiv[io]|ordign[io]|bomb[ae]|detonator[ie]|innesc[oi]|granat[ae]|munizion[ei]|nervino|gas\\s+nervino|arm[ae]\\s+(chimic|biologic|nuclear|fissile)|esplosion[ei]\\s+improv|IED|TATP|HMTD|PETN|RDX|C-?4|nitrato\\s+di\\s+ammonio|explosive[s]?|bomb|weapon|firearm)";
+  const DANGER_RE_IT = new RegExp(`\\b${DANGEROUS_VERBS_IT}\\w*[\\s\\S]{0,120}\\b${DANGEROUS_TARGETS}\\b`, 'i');
+  const DANGER_RE_EN = new RegExp(`\\b${DANGEROUS_VERBS_EN}\\w*[\\s\\S]{0,120}\\b${DANGEROUS_TARGETS}\\b`, 'i');
+  // Pattern inverso: target prima, verbo dopo (gap fino a 200 char)
+  const DANGER_RE_IT_REV = new RegExp(`\\b${DANGEROUS_TARGETS}\\b[\\s\\S]{0,200}\\b${DANGEROUS_VERBS_IT}\\w*`, 'i');
+  const DANGER_RE_EN_REV = new RegExp(`\\b${DANGEROUS_TARGETS}\\b[\\s\\S]{0,200}\\b${DANGEROUS_VERBS_EN}\\w*`, 'i');
+  // Inverso (target prima del verbo): "ordigno IED passo dopo passo", "esplosivo procedura"
+  const DANGER_TARGET_PROC = new RegExp(`\\b${DANGEROUS_TARGETS}\\b[\\s\\S]{0,40}(passo\\s+(dopo|per)\\s+passo|step\\s*by\\s*step|procedura|procedure|guida|guide|manuale|manual|ricetta|recipe|ingredient[ei]|assemblaggio|tutorial|istruzion[ei])`, 'i');
+  if (DANGER_RE_IT.test(message) || DANGER_RE_EN.test(message) || DANGER_RE_IT_REV.test(message) || DANGER_RE_EN_REV.test(message) || DANGER_TARGET_PROC.test(message)) {
+    console.log(`[intent] blocked: dangerous verb+target combo`);
+    return res.status(403).json({ error: "Richiesta non consentita.", reason: "dangerous_content" });
+  }
+  // Blocca ricette IED specifiche (componenti combinati = high signal)
+  const IED_RECIPE = /\b(fertilizzante|ammonium\s*nitrate|nitrato).{0,30}(diesel|carburante|fuel\s*oil|gasoline|benzina).{0,30}(timer|detonator|innesco|tappo|fuse)/i;
+  if (IED_RECIPE.test(message)) {
+    console.log(`[intent] blocked: IED recipe components`);
+    return res.status(403).json({ error: "Richiesta non consentita.", reason: "dangerous_content" });
+  }
   // Blocca caratteri non-latini (cinese, arabo, cirillico non normalizzato)
   if (/[一-鿿؀-ۿЀ-ӿ]/.test(message)) {
     console.log(`[intent] blocked: non-latin chars`);
@@ -1112,7 +1184,7 @@ app.post("/api/intent", strictLimiter, async (req, res) => {
   for (const word of words) {
     if (PA_ACRONYMS.has(word)) continue; // acronimo PA legittimo
     const consonants = word.replace(/[aeiouy]/g, "").length;
-    if (word.length >= 6 && consonants / word.length > 0.85) {
+    if (word.length >= 4 && consonants / word.length > 0.80) {
       console.log(`[intent] blocked: cipher pattern (word: ${word})`);
       return res.status(403).json({ error: "Richiesta non consentita.", reason: "encoding" });
     }

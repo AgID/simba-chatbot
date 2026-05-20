@@ -25,6 +25,7 @@ build/
 
 # Backup e temp
 *.bak
+*.bak-*
 *.tmp
 *.swp
 *~
@@ -45,3 +46,7 @@ logs/
 # Docker volumes locali
 data/
 volumes/
+
+# VA reports (output dei test, esclusi dalla repo istituzionale)
+va-students-reports/
+va-advanced-reports/
