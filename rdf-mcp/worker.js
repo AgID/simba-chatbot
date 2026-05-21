@@ -1660,9 +1660,20 @@ function buildDeterministicTTL(csvText,ontos,ipa,ente){
       var addrMap={indirizzo:'clv:fullAddress',via:'clv:fullAddress',strada:'clv:fullAddress',cap:'clv:postCode',ubicazione_esercizio:'clv:fullAddress',indirizzo_esercizio:'clv:fullAddress',dislocazione:'clv:fullAddress',contrada:'clv:fullAddress',frazione:'clv:hasSpatialCoverage',localita:'clv:hasSpatialCoverage',provincia:'clv:hasProvince',comune:'clv:hasCity',citta:'clv:hasCity',regione:'clv:hasRegion'};
       // Se ANNCSU ha già popolato fullAddress, non duplicare con denominazione_strada da sola
       if(!_anncsuHandled){addrMap.denominazione_strada='clv:hasStreetToponym';addrMap.nome_strada='clv:hasStreetToponym';}
+      var _clvObjProps={'clv:hasCity':'city','clv:hasProvince':'province','clv:hasRegion':'region','clv:hasStreetToponym':'street-toponym'};
       Object.keys(addrMap).forEach(function(col){
         var xi=nh.indexOf(col);
-        if(xi>=0&&row[xi]&&row[xi].trim()&&!(addrMap[col]==='clv:postCode'&&row[xi].trim()==='0')){var v=row[xi].trim();addrTriples.push({pred:addrMap[col],val:litQ(v,'it')});}
+        if(xi>=0&&row[xi]&&row[xi].trim()&&!(addrMap[col]==='clv:postCode'&&row[xi].trim()==='0')){
+          var v=row[xi].trim();var pred=addrMap[col];
+          if(_clvObjProps[pred]){
+            var _slug=v.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');
+            var _nodeURI=base+_clvObjProps[pred]+'/'+_slug;
+            addrTriples.push({pred:pred,val:'<'+_nodeURI+'>',raw:true});
+            addrTriples.push({pred:'_clvNode',val:_nodeURI+'\x00'+pred+'\x00'+v});
+          } else {
+            addrTriples.push({pred:pred,val:litQ(v,'it')});
+          }
+        }
       });
       var latI=nh.indexOf('lat'),lonI=nh.indexOf('lon');
       if(latI>=0&&row[latI]){var _la=parseFloat(row[latI].trim().replace(',','.'));if(!isNaN(_la)&&_la!==0)addrTriples.push({pred:'geo:lat',val:dq+_la+dq+'^^xsd:decimal'});}
@@ -1674,13 +1685,14 @@ function buildDeterministicTTL(csvText,ontos,ipa,ente){
         var _hasCityFromCsv=addrTriples.some(function(t){return t.pred==='clv:hasCity';});
         var _hasProvFromCsv=addrTriples.some(function(t){return t.pred==='clv:hasProvince';});
         var _hasRegFromCsv=addrTriples.some(function(t){return t.pred==='clv:hasRegion';});
-        if(!_hasCityFromCsv)addrTriples.push({pred:'clv:hasCity',val:litQ(_ipaData.n,'it')});
-        if(!_hasProvFromCsv)addrTriples.push({pred:'clv:hasProvince',val:litQ(_ipaData.s,'it')});
-        if(!_hasRegFromCsv)addrTriples.push({pred:'clv:hasRegion',val:litQ(_ipaData.r,'it')});
+        if(!_hasCityFromCsv&&_ipaData.n){var _sc=_ipaData.n.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');var _uc=base+'city/'+_sc;addrTriples.push({pred:'clv:hasCity',val:'<'+_uc+'>',raw:true});addrTriples.push({pred:'_clvNode',val:_uc+'\x00clv:hasCity\x00'+_ipaData.n});}
+        if(!_hasProvFromCsv&&_ipaData.s){var _sp=_ipaData.s.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');var _up=base+'province/'+_sp;addrTriples.push({pred:'clv:hasProvince',val:'<'+_up+'>',raw:true});addrTriples.push({pred:'_clvNode',val:_up+'\x00clv:hasProvince\x00'+_ipaData.s});}
+        if(!_hasRegFromCsv&&_ipaData.r){var _sr=_ipaData.r.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');var _ur=base+'region/'+_sr;addrTriples.push({pred:'clv:hasRegion',val:'<'+_ur+'>',raw:true});addrTriples.push({pred:'_clvNode',val:_ur+'\x00clv:hasRegion\x00'+_ipaData.r});}
       }
       // Filtra i nodi speciali (_streetNode, _civicNode) prima di emettere
-      var _streetNodesW=[],_civicNodesW=[];
+      var _streetNodesW=[],_civicNodesW=[],_clvNodesW=[];
       var addrTriplesF=addrTriples.filter(function(t){
+        if(t.pred==='_clvNode'){_clvNodesW.push(t.val);return false;}
         if(t.pred==='_streetNode'){_streetNodesW.push(t.val);return false;}
         if(t.pred==='_civicNode'){_civicNodesW.push(t.val);return false;}
         // Evita clv:hasAddress autoreferenziale quando subURI===addrURI
@@ -1692,6 +1704,16 @@ function buildDeterministicTTL(csvText,ontos,ipa,ente){
         addrTriplesF.forEach(function(t,ti){var sep=ti===addrTriplesF.length-1?' .':' ;';ttl+=nl+sp+t.pred+' '+t.val+sep;});
         ttl+=nl+nl;
       }
+      // Emetti nodi clv:City, clv:Province, clv:Region
+      var _clvClassMap={'clv:hasCity':'clv:City','clv:hasProvince':'clv:Province','clv:hasRegion':'clv:Region'};
+      var _clvEmitted={};
+      _clvNodesW.forEach(function(nodeVal){
+        var parts=nodeVal.split('\x00');var uri=parts[0];var pred=parts[1];var label=parts[2];
+        if(_clvEmitted[uri])return;_clvEmitted[uri]=true;
+        var cls=_clvClassMap[pred]||'clv:City';
+        ttl+='<'+uri+'> a '+cls+' ;'+nl;
+        ttl+=sp+'rdfs:label '+litQ(label,'it')+' .'+nl+nl;
+      });
       // Emetti nodi clv:StreetToponym
       _streetNodesW.forEach(function(nodeVal){
         var parts=nodeVal.split(' ');
@@ -2026,6 +2048,14 @@ const CORS_HEADERS = {
 };
 
 async function fetchCSV(url) {
+  // Sicurezza: blocca SSRF — solo https:// verso host pubblici
+  let _u;
+  try { _u = new URL(url); } catch { throw new Error('URL non valido'); }
+  if (_u.protocol !== 'https:') throw new Error('Solo URL https:// sono consentiti');
+  const _blocked = ['169.254.','10.','127.','0.0.0.0','::1','localhost','metadata.'];
+  if (_blocked.some(function(b){return _u.hostname.startsWith(b)||_u.hostname===b.replace('.','');})){
+    throw new Error('URL non consentito');
+  }
   const resp = await fetch(url, {
     headers: { 'User-Agent': 'CSV2RDF-Worker/1.0 (https://github.com/piersoft/CSV-to-RDF)' },
     cf: { cacheTtl: 300, cacheEverything: true }
@@ -2656,7 +2686,7 @@ export default {
     }
 
     const ipa    = (reqUrl.searchParams.get('ipa') || 'ente').toLowerCase().replace(/[^a-z0-9_]/g, '');
-    const paName = reqUrl.searchParams.get('pa') || 'Ente Pubblico';
+    const paName = (reqUrl.searchParams.get('pa') || 'Ente Pubblico').replace(/[\r\n]/g, ' ').replace(/[<>"]/g, '').slice(0, 200);
     const fmtReq = reqUrl.searchParams.get('fmt') || 'ttl';
     const ontoForced = reqUrl.searchParams.get('onto');
 
@@ -2671,7 +2701,7 @@ export default {
       }
 
       const ontos = ontoForced
-        ? ontoForced.split(',').map(o => o.trim())
+        ? ontoForced.split(',').map(o => o.trim()).filter(o => new Set(['QB','CLV','COV','POI','TI','CPSV','CPSV-AP','SMAPIT','SM','IoT','PublicContract','CPV','CPEV','GTFS','CulturalHeritage','Cultural-ON','ACCO','PARK','ADMS','NDC','Indicator','Project','Route','AtlasOfPaths','MU','Transparency','RPO','Learning','ANNCSU_INDIR','ANNCSU_STRAD','L0']).has(o))
         : detectOntologiesDeterministic(parsed.headers, parsed.rows);
 
       let ttl = buildDeterministicTTL(csvText, ontos, ipa, paName);
