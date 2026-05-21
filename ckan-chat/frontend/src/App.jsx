@@ -118,17 +118,17 @@ const TOUR_STEPS = [
   {
     title: "Valida CSV",
     text: "Clicca qui per verificare la qualità di un file CSV secondo gli standard PA italiani (RFC 4180, ISO 25012, linee guida AGID). Punteggio da 0 a 100.",
-    target: "tour-validate",
+    target: "tour-validate", pos: "right",
   },
   {
     title: "Converti in RDF",
     text: "Trasforma un CSV in RDF Linked Data conforme alle ontologie ufficiali dati-semantic-assets. Richiede il Codice IPA dell'ente.",
-    target: "tour-enrich",
+    target: "tour-enrich", pos: "right",
   },
   {
     title: "Strumenti consigliati",
     text: "Qui trovi i link per attività specifiche complementari a SIMBA. Fortemente consigliati.",
-    target: "sidebar-tools",
+    target: "sidebar-tools", pos: "right",
   },
 ];
 
@@ -1604,8 +1604,8 @@ SELECT ?ipaCode WHERE {
           <div className="tour-overlay" onClick={e => e.target === e.currentTarget && endTour()}>
             {rect && (
               <div className="tour-highlight" style={{
-                top: rect.top - 8, left: rect.left - 8,
-                width: rect.width + 16, height: rect.height + 16,
+                top: rect.top - 12, left: rect.left - 12,
+                width: rect.width + 24, height: rect.height + 24,
               }} />
             )}
             <div className="tour-bubble" style={(() => {
@@ -1656,12 +1656,11 @@ SELECT ?ipaCode WHERE {
 
       <AdvancedSearch onResults={handleAdvResults} onLoading={setLoading} onLoadingMsg={handleAdvLoading} />
         <div className="wizard-bar">
-          <div className="wizard-step">
+          <div id="wizard-cosa" className="wizard-step">
             <span className="wizard-num">1</span>
             <span className="wizard-label">Cosa</span>
             <textarea
               ref={inputRef}
-              id="wizard-cosa"
               className="wizard-input"
               aria-label="Cosa vuoi cercare"
               value={input}
