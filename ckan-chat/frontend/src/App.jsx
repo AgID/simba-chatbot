@@ -953,7 +953,7 @@ SELECT ?ipaCode WHERE {
           const cl = parseInt(headRes.headers.get("content-length") || "0", 10);
           if (cl > 0 && cl > MAX_CSV_BYTES) {
             const sizeMB = (cl / 1024 / 1024).toFixed(1);
-            throw new Error(`Il file CSV è troppo grande per la validazione online (${sizeMB} MB). Il limite è 20 MB. Scarica il file e usa il validatore batch: https://github.com/piersoft/opendata-pa-quality-audit`);
+            throw new Error(`Il file CSV è troppo grande per la validazione online (${sizeMB} MB). Il limite è 20 MB. Scarica il file e usa il validatore batch: https://github.com/AgID/opendata-pa-quality-audit`);
           }
         } catch (headErr) {
           if (headErr.message.includes("troppo grande")) throw headErr;
@@ -984,7 +984,7 @@ SELECT ?ipaCode WHERE {
             }
             if (tooLarge) {
               const sizeMB = (totalBytes / 1024 / 1024).toFixed(1);
-              throw new Error(`Il file CSV è troppo grande per la validazione online (>${sizeMB} MB). Il limite è 20 MB. Scarica il file e usa il validatore batch: https://github.com/piersoft/opendata-pa-quality-audit`);
+              throw new Error(`Il file CSV è troppo grande per la validazione online (>${sizeMB} MB). Il limite è 20 MB. Scarica il file e usa il validatore batch: https://github.com/AgID/opendata-pa-quality-audit`);
             }
             csvText = chunks.join("");
           }
@@ -1374,7 +1374,7 @@ SELECT ?ipaCode WHERE {
           <a className="sidebar-plain-link" href="https://cruscotto-italia.dati.gov.it/" target="_blank" rel="noopener noreferrer">
             Cruscotto Italia <span className="plain-tag plain-tag-agid">AgID</span>
           </a>
-          <a className="sidebar-plain-link" href="https://github.com/piersoft/opendata-pa-quality-audit" target="_blank" rel="noopener noreferrer">
+          <a className="sidebar-plain-link" href="https://github.com/AgID/opendata-pa-quality-audit" target="_blank" rel="noopener noreferrer">
             Tool validazione CSV massivo <span className="plain-tag plain-tag-agid">AgID</span>
           </a>
           <a className="sidebar-plain-link" href="https://lod.dati.gov.it/sparql/" target="_blank" rel="noopener noreferrer">
