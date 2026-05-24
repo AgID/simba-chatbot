@@ -780,7 +780,7 @@ function detectFromCorpus(headers) {
   return [...new Set(mainResult)];
 }
 
-function detectOntologiesDeterministic(headers, rows) {
+function detectOntologiesDeterministic(headers, rows, csvUrl) {
   var norm = headers.map(function(h){
     return h.toLowerCase().trim().replace(/\s+/g,'_').replace(/-/g,'_').replace(/[^\w]/g,'');
   });
@@ -1246,6 +1246,30 @@ function detectOntologiesDeterministic(headers, rows) {
     if (!_hasTIcols) { result.delete('TI'); }
   }
 
+  // ── URL CONTEXT BOOST ──────────────────────────────────────────────────────
+  // Rafforzamento ontologie basato sul nome/path dell'URL del CSV sorgente
+  if (csvUrl) {
+    var _u = csvUrl.toLowerCase();
+    var _urlBoost = [
+      { pat: /cultura|interesse_cultural|beni_cultural|patrimonio_cultural|luogo_cultura|luoghi_cultura|sito_archeolog|museo|archiv|biblioteche|monumenti/, add: ['CulturalHeritage'], del: ['ACCO','GTFS','PublicContract'] },
+      { pat: /ricettiv|strutture_ricettiv|albergh|hotel|bed_and_|b_and_b|agriturism|campeggi|ostell/, add: ['ACCO'], del: ['CulturalHeritage'] },
+      { pat: /parcheggi|parking|sosta|autopark/, add: ['PARK','POI'], del: [] },
+      { pat: /scuol|istruzion|scolastic|istitut/, add: ['SMAPIT','SM'], del: ['ACCO'] },
+      { pat: /defibrillator|\bdae\b/, add: ['POI','CLV','SM'], del: ['ACCO','CulturalHeritage'] },
+      { pat: /incidenti|sinistri_strad/, add: ['POI','TI'], del: ['ACCO'] },
+      { pat: /farmaci|farmacolog|farmacie/, add: ['POI','SM'], del: ['ACCO'] },
+      { pat: /appalti|contratti_pubbl|gare_appalto/, add: ['PublicContract'], del: ['CLV','POI','CulturalHeritage'] },
+      { pat: /trasport|fermat|stazion|gtfs/, add: ['GTFS'], del: ['ACCO'] },
+    ];
+    _urlBoost.forEach(function(rule) {
+      if (rule.pat.test(_u)) {
+        rule.add.forEach(function(o) { result.add(o); });
+        rule.del.forEach(function(o) { result.delete(o); });
+      }
+    });
+  }
+  // ── FINE URL CONTEXT BOOST ─────────────────────────────────────────────────
+
   return Array.from(result);
 }
 
@@ -1660,20 +1684,9 @@ function buildDeterministicTTL(csvText,ontos,ipa,ente){
       var addrMap={indirizzo:'clv:fullAddress',via:'clv:fullAddress',strada:'clv:fullAddress',cap:'clv:postCode',ubicazione_esercizio:'clv:fullAddress',indirizzo_esercizio:'clv:fullAddress',dislocazione:'clv:fullAddress',contrada:'clv:fullAddress',frazione:'clv:hasSpatialCoverage',localita:'clv:hasSpatialCoverage',provincia:'clv:hasProvince',comune:'clv:hasCity',citta:'clv:hasCity',regione:'clv:hasRegion'};
       // Se ANNCSU ha già popolato fullAddress, non duplicare con denominazione_strada da sola
       if(!_anncsuHandled){addrMap.denominazione_strada='clv:hasStreetToponym';addrMap.nome_strada='clv:hasStreetToponym';}
-      var _clvObjProps={'clv:hasCity':'city','clv:hasProvince':'province','clv:hasRegion':'region','clv:hasStreetToponym':'street-toponym'};
       Object.keys(addrMap).forEach(function(col){
         var xi=nh.indexOf(col);
-        if(xi>=0&&row[xi]&&row[xi].trim()&&!(addrMap[col]==='clv:postCode'&&row[xi].trim()==='0')){
-          var v=row[xi].trim();var pred=addrMap[col];
-          if(_clvObjProps[pred]){
-            var _slug=v.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');
-            var _nodeURI=base+_clvObjProps[pred]+'/'+_slug;
-            addrTriples.push({pred:pred,val:'<'+_nodeURI+'>',raw:true});
-            addrTriples.push({pred:'_clvNode',val:_nodeURI+'\x00'+pred+'\x00'+v});
-          } else {
-            addrTriples.push({pred:pred,val:litQ(v,'it')});
-          }
-        }
+        if(xi>=0&&row[xi]&&row[xi].trim()&&!(addrMap[col]==='clv:postCode'&&row[xi].trim()==='0')){var v=row[xi].trim();addrTriples.push({pred:addrMap[col],val:litQ(v,'it')});}
       });
       var latI=nh.indexOf('lat'),lonI=nh.indexOf('lon');
       if(latI>=0&&row[latI]){var _la=parseFloat(row[latI].trim().replace(',','.'));if(!isNaN(_la)&&_la!==0)addrTriples.push({pred:'geo:lat',val:dq+_la+dq+'^^xsd:decimal'});}
@@ -1685,14 +1698,13 @@ function buildDeterministicTTL(csvText,ontos,ipa,ente){
         var _hasCityFromCsv=addrTriples.some(function(t){return t.pred==='clv:hasCity';});
         var _hasProvFromCsv=addrTriples.some(function(t){return t.pred==='clv:hasProvince';});
         var _hasRegFromCsv=addrTriples.some(function(t){return t.pred==='clv:hasRegion';});
-        if(!_hasCityFromCsv&&_ipaData.n){var _sc=_ipaData.n.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');var _uc=base+'city/'+_sc;addrTriples.push({pred:'clv:hasCity',val:'<'+_uc+'>',raw:true});addrTriples.push({pred:'_clvNode',val:_uc+'\x00clv:hasCity\x00'+_ipaData.n});}
-        if(!_hasProvFromCsv&&_ipaData.s){var _sp=_ipaData.s.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');var _up=base+'province/'+_sp;addrTriples.push({pred:'clv:hasProvince',val:'<'+_up+'>',raw:true});addrTriples.push({pred:'_clvNode',val:_up+'\x00clv:hasProvince\x00'+_ipaData.s});}
-        if(!_hasRegFromCsv&&_ipaData.r){var _sr=_ipaData.r.toLowerCase().replace(/[^a-z0-9]/g,'-').replace(/-+/g,'-');var _ur=base+'region/'+_sr;addrTriples.push({pred:'clv:hasRegion',val:'<'+_ur+'>',raw:true});addrTriples.push({pred:'_clvNode',val:_ur+'\x00clv:hasRegion\x00'+_ipaData.r});}
+        if(!_hasCityFromCsv)addrTriples.push({pred:'clv:hasCity',val:litQ(_ipaData.n,'it')});
+        if(!_hasProvFromCsv)addrTriples.push({pred:'clv:hasProvince',val:litQ(_ipaData.s,'it')});
+        if(!_hasRegFromCsv)addrTriples.push({pred:'clv:hasRegion',val:litQ(_ipaData.r,'it')});
       }
       // Filtra i nodi speciali (_streetNode, _civicNode) prima di emettere
-      var _streetNodesW=[],_civicNodesW=[],_clvNodesW=[];
+      var _streetNodesW=[],_civicNodesW=[];
       var addrTriplesF=addrTriples.filter(function(t){
-        if(t.pred==='_clvNode'){_clvNodesW.push(t.val);return false;}
         if(t.pred==='_streetNode'){_streetNodesW.push(t.val);return false;}
         if(t.pred==='_civicNode'){_civicNodesW.push(t.val);return false;}
         // Evita clv:hasAddress autoreferenziale quando subURI===addrURI
@@ -1704,16 +1716,6 @@ function buildDeterministicTTL(csvText,ontos,ipa,ente){
         addrTriplesF.forEach(function(t,ti){var sep=ti===addrTriplesF.length-1?' .':' ;';ttl+=nl+sp+t.pred+' '+t.val+sep;});
         ttl+=nl+nl;
       }
-      // Emetti nodi clv:City, clv:Province, clv:Region
-      var _clvClassMap={'clv:hasCity':'clv:City','clv:hasProvince':'clv:Province','clv:hasRegion':'clv:Region'};
-      var _clvEmitted={};
-      _clvNodesW.forEach(function(nodeVal){
-        var parts=nodeVal.split('\x00');var uri=parts[0];var pred=parts[1];var label=parts[2];
-        if(_clvEmitted[uri])return;_clvEmitted[uri]=true;
-        var cls=_clvClassMap[pred]||'clv:City';
-        ttl+='<'+uri+'> a '+cls+' ;'+nl;
-        ttl+=sp+'rdfs:label '+litQ(label,'it')+' .'+nl+nl;
-      });
       // Emetti nodi clv:StreetToponym
       _streetNodesW.forEach(function(nodeVal){
         var parts=nodeVal.split(' ');
@@ -2053,7 +2055,7 @@ async function fetchCSV(url) {
   try { _u = new URL(url); } catch { throw new Error('URL non valido'); }
   if (_u.protocol !== 'https:') throw new Error('Solo URL https:// sono consentiti');
   const _blocked = ['169.254.','10.','127.','0.0.0.0','::1','localhost','metadata.'];
-  if (_blocked.some(function(b){return _u.hostname.startsWith(b)||_u.hostname===b.replace('.','');})){
+  if (_blocked.some(b => _u.hostname.startsWith(b) || _u.hostname === b.replace('.',''))){
     throw new Error('URL non consentito');
   }
   const resp = await fetch(url, {
@@ -2700,9 +2702,10 @@ export default {
         });
       }
 
+      const _allowedOntos = new Set(['QB','CLV','COV','POI','TI','CPSV','CPSV-AP','SMAPIT','SM','IoT','PublicContract','CPV','CPEV','GTFS','CulturalHeritage','Cultural-ON','ACCO','PARK','ADMS','NDC','Indicator','Project','Route','AtlasOfPaths','MU','Transparency','RPO','Learning','ANNCSU_INDIR','ANNCSU_STRAD','L0']);
       const ontos = ontoForced
-        ? ontoForced.split(',').map(o => o.trim()).filter(o => new Set(['QB','CLV','COV','POI','TI','CPSV','CPSV-AP','SMAPIT','SM','IoT','PublicContract','CPV','CPEV','GTFS','CulturalHeritage','Cultural-ON','ACCO','PARK','ADMS','NDC','Indicator','Project','Route','AtlasOfPaths','MU','Transparency','RPO','Learning','ANNCSU_INDIR','ANNCSU_STRAD','L0']).has(o))
-        : detectOntologiesDeterministic(parsed.headers, parsed.rows);
+        ? ontoForced.split(',').map(o => o.trim()).filter(o => _allowedOntos.has(o))
+        : detectOntologiesDeterministic(parsed.headers, parsed.rows, csvUrl);
 
       let ttl = buildDeterministicTTL(csvText, ontos, ipa, paName);
       ttl = normalizeTTL(ttl);
