@@ -244,7 +244,7 @@ SIMBA implementa un sistema di sicurezza **multi-strato** testato contro attacch
 
 ### Modello LLM robusto
 
-- **Llama 3.2 3B**: modello instruction-following resistente a jailbreak comuni
+- **Llama 3.2 8B**: modello instruction-following resistente a jailbreak comuni
 - **Fail-safe**: se guardrail down/timeout → blocco automatico (no fail-open su errori critici)
 
 ### Infrastruttura
