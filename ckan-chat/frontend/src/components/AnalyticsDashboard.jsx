@@ -16,7 +16,7 @@ function useIsMobile() {
   }, []);
   return mobile;
 }
-const TOKEN = import.meta.env.VITE_ANALYTICS_TOKEN || "changeme";
+// [SECURITY VA-03] token analytics rimosso dal client; gate = basic auth nginx su /analytics-api/stats/
 
 const RANGES = [
   { label: "Oggi",      days: 1   },
@@ -62,7 +62,7 @@ function DownloadBtn({label,rows,cols,filename}){
 // API
 async function apiFetch(path,from,to){
   const p=new URLSearchParams({from,to});
-  const r=await fetch(`${ANALYTICS_BASE}${path}?${p}`,{headers:{Authorization:`Bearer ${TOKEN}`}});
+  const r=await fetch(`${ANALYTICS_BASE}${path}?${p}`);
   if(!r.ok)throw new Error(`${r.status} ${path}`);
   return r.json();
 }

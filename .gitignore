@@ -50,3 +50,4 @@ volumes/
 # VA reports (output dei test, esclusi dalla repo istituzionale)
 va-students-reports/
 va-advanced-reports/
+.env.admin

@@ -49,16 +49,7 @@ const SUGGESTIONS = [
   { text: "Valida CSV da URL",                       icon: "✅", action: "validate_prompt" },
 ];
 
-const BLOCKLIST = [
-  // Prompt injection
-  "ignore previous","system prompt","forget instructions","jailbreak","prompt injection",
-  "ignore instructions","disregard","bypass",
-  // Contenuti esplicitamente illeciti/pornografici
-  "porn","porno","pornograph","xxx","nude","naked","escort","prostitut",
-  "pedofil","pedophil","child abuse","snuff","gore",
-  "cumshot","blowjob","handjob","gangbang","creampie","onlyfans","milf","dildo","vibrat",
-  "cocain","eroina","metanfetamin","drug deal","narcotic"
-];
+// [SECURITY VA-03] BLOCKLIST statica rimossa: enforcement server-side in /api/intent.
 
 const SPARQL_EP = import.meta.env.VITE_SPARQL_ENDPOINT || "https://lod.dati.gov.it/sparql";
 
@@ -156,7 +147,7 @@ export default function App() {
   const [showHelp,    setShowHelp]    = useState(false);
   const [tourStep,    setTourStep]    = useState(-1); // -1 = tour non attivo
   const [tourActive,  setTourActive]  = useState(false);
-  const [blocklist,   setBlocklist]   = useState(BLOCKLIST);
+  // [SECURITY VA-03] stato blocklist client rimosso
 
   // Tour guidato — mostra al primo avvio se non già visto
   useEffect(() => {
@@ -181,13 +172,7 @@ export default function App() {
   function endTour() { setTourActive(false); setTourStep(-1); }
   function skipTourForever() { localStorage.setItem("simba_tour_done", "1"); endTour(); }
 
-  // Carica blocklist dinamica dal backend all'avvio
-  useEffect(() => {
-    fetch(`${BACKEND_URL}/api/blocklist`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.blocklist?.length) setBlocklist(data.blocklist); })
-      .catch(() => {}); // fallback alla BLOCKLIST hardcodata
-  }, []);
+  // [SECURITY VA-03] caricamento blocklist client rimosso (era disclosure guardrail).
   const [wizardDove,  setWizardDove]  = useState("");
   const [doveAcList,  setDoveAcList]  = useState([]);
   const [showDoveAc,  setShowDoveAc]  = useState(false);
@@ -773,11 +758,7 @@ SELECT ?ipaCode WHERE {
     setMessages([]);  // nuova ricerca — pulisce la chat
     resetAdvancedSearch();
     if (!text || loading) return;
-    if (blocklist.some(p => text.toLowerCase().includes(p.toLowerCase()))) {
-      emitAnalytics("off_topic", { query_preview: text.slice(0, 100), guardrail_layer: "blocklist" });
-      addMsg("assistant", "Richiesta non consentita. SIMBA risponde esclusivamente a domande sugli open data della Pubblica Amministrazione italiana.");
-      return;
-    }
+    // [SECURITY VA-03] pre-filtro blocklist client rimosso; enforcement server-side in /api/intent (403 BLOCKED).
     if (text.length > 2000) { alert("Messaggio troppo lungo."); return; }
 
     setSidebarOpen(false);
@@ -795,6 +776,7 @@ SELECT ?ipaCode WHERE {
       else if (intent === "ENRICH") setPageTitle("Conversione RDF");
 
       if (intent === "BLOCKED") {
+        emitAnalytics("off_topic", { query_preview: text.slice(0, 100), guardrail_layer: "blocklist" });
         addMsg("assistant", "Richiesta non consentita. SIMBA risponde esclusivamente a domande sugli open data della Pubblica Amministrazione italiana.");
         return;
       }

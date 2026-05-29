@@ -12,6 +12,8 @@ import { join } from "path";
 import cors from "cors";
 import fetch from "node-fetch";
 import rateLimit from "express-rate-limit";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import { routeQuestion } from "./router.js";
 
 // ─── Analytics: fire-and-forget ───────────────────────────────────────────────
@@ -167,22 +169,19 @@ async function checkGuardrail(prompt) {
 
 app.set("trust proxy", 1);
 
+// [SECURITY VA-03] CORS: niente reflection. Allowlist da CORS_ORIGIN; default deny cross-origin.
 app.use(cors({
   origin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",").map(s => s.trim())
-    : true,
+    : false,
   methods: ["GET", "POST"],
 }));
 
 app.use(express.json({ limit: "10mb" }));
 
-app.use((req, res, next) => {
-  res.setHeader("X-Frame-Options", "SAMEORIGIN"); // Drupal iframe supportato
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Strict-Transport-Security", "max-age=31536000");
-  res.setHeader("Content-Security-Policy", "default-src 'self'; frame-ancestors 'self' *;");
-  next();
-});
+// [SECURITY VA-03] Header di sicurezza gestiti UNICAMENTE da nginx (single source):
+// rimossi HSTS/CSP/XFO/XCTO duplicati dall'app (evita header doppi/ambigui su /api/*).
+app.disable("x-powered-by");
 
 // ─── Sicurezza: blocco SSRF ──────────────────────────────────────────────────
 function isPrivateOrDangerous(urlStr) {
@@ -1083,7 +1082,7 @@ app.post("/api/intent", strictLimiter, async (req, res) => {
   if (!message) return res.status(400).json({ error: "message required" });
   if (message.length > 500) return res.status(400).json({ error: "Messaggio troppo lungo (max 500 caratteri)." });
   const msgLower = message.toLowerCase();
-  if (dynamicBlocklist.some(p => msgLower.includes(p.toLowerCase()))) return res.status(400).json({ error: "Richiesta non consentita." });
+  if (dynamicBlocklist.some(p => msgLower.includes(p.toLowerCase()))) return res.status(403).json({ error: "Richiesta non consentita.", reason: "blocklist" });
   
   // Filtri deterministici anti-encoding/obfuscation
   // Blocca command injection patterns
@@ -1240,10 +1239,9 @@ app.get("/api/resources/:datasetId", async (req, res) => {
 // ─── Validate endpoint diretto ───────────────────────────────────────────────
 // Chiama validatore-mcp direttamente senza passare per Ollama.
 
-// Endpoint pubblico per la blocklist — espone solo le parole, senza auth
-app.get("/api/blocklist", (req, res) => {
-  res.json({ blocklist: dynamicBlocklist });
-});
+// [SECURITY VA-03] Route pubblica /api/blocklist RIMOSSA: esponeva i guardrail in chiaro.
+// Enforcement blocklist resta server-side in /api/intent (403 reason:"blocklist").
+// Gestione admin della blocklist via /api/admin/blocklist (autenticata).
 
 app.post("/api/detect-ontos", async (req, res) => {
   try {
@@ -1533,9 +1531,14 @@ app.post("/api/validate-text", strictLimiter, async (req, res) => {
 
 // ─── SPARQL proxy — il browser non può fare POST su lod.dati.gov.it
 // Il backend fa la chiamata GET e restituisce il JSON pulito
-app.post("/api/sparql", async (req, res) => {
+app.post("/api/sparql", strictLimiter, async (req, res) => {
   const { query } = req.body;
-  if (!query) return res.status(400).json({ error: "query required" });
+  if (!query || typeof query !== "string") return res.status(400).json({ error: "query required" });
+  // [SECURITY VA-03] limiti complessita/abuso: cap lunghezza + sola lettura (no SPARQL UPDATE)
+  if (query.length > 4000) return res.status(400).json({ error: "query troppo lunga (max 4000)" });
+  if (/\b(INSERT|DELETE|DROP|CLEAR|LOAD|CREATE|MOVE|COPY|ADD)\b/i.test(query)) {
+    return res.status(400).json({ error: "operazione non consentita (solo query di lettura)" });
+  }
   try {
     const url = `${SPARQL_ENDPOINT}?query=${encodeURIComponent(query)}&format=${encodeURIComponent("application/sparql-results+json")}`;
     const r = await fetch(url, {
@@ -1726,19 +1729,42 @@ async function checkCsvContentType(url) {
 // ── Admin: gestione blocklist ─────────────────────────────────────────────────
 const adminLimiter = rateLimit({ windowMs: 60000, max: 30, message: { error: "Too many requests" } });
 
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "changeme-admin";
+// ── Auth admin: login con credenziali server-side → JWT a scadenza breve ──────
+const JWT_SECRET = process.env.JWT_SECRET || "";
+const ADMIN_USER = process.env.ADMIN_USER || "admin";
+const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || "";
+const ADMIN_JWT_TTL = process.env.ADMIN_JWT_TTL || "2h";
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: "Troppi tentativi di login." } });
 
-function requireAdminToken(req, res, next) {
+app.post("/api/admin/login", loginLimiter, express.json(), async (req, res) => {
+  if (!JWT_SECRET || !ADMIN_PASSWORD_HASH) return res.status(500).json({ error: "Auth admin non configurata" });
+  const { user, password } = req.body || {};
+  if (typeof user !== "string" || typeof password !== "string") return res.status(400).json({ error: "Credenziali mancanti" });
+  const ok = user === ADMIN_USER && await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+  if (!ok) return res.status(401).json({ error: "Credenziali non valide" });
+  const token = jwt.sign({ sub: ADMIN_USER, role: "admin" }, JWT_SECRET, { expiresIn: ADMIN_JWT_TTL });
+  res.json({ token, expiresIn: ADMIN_JWT_TTL });
+});
+
+function requireAdminJWT(req, res, next) {
   const auth = req.headers["authorization"] || "";
-  if (auth === `Bearer ${ADMIN_TOKEN}`) return next();
-  res.status(401).json({ error: "Non autorizzato" });
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (!m || !JWT_SECRET) return res.status(401).json({ error: "Non autorizzato" });
+  try {
+    const payload = jwt.verify(m[1], JWT_SECRET);
+    if (payload.role !== "admin") return res.status(403).json({ error: "Permessi insufficienti" });
+    req.admin = payload;
+    return next();
+  } catch {
+    return res.status(401).json({ error: "Token non valido o scaduto" });
+  }
 }
 
-app.get("/api/admin/blocklist", adminLimiter, (req, res) => {
+app.get("/api/admin/blocklist", adminLimiter, requireAdminJWT, (req, res) => {
   res.json({ blocklist: dynamicBlocklist });
 });
 
-app.post("/api/admin/blocklist", adminLimiter, requireAdminToken, express.json(), (req, res) => {
+app.post("/api/admin/blocklist", adminLimiter, requireAdminJWT, express.json(), (req, res) => {
   const { word } = req.body;
   if (!word || typeof word !== "string") return res.status(400).json({ error: "word richiesta" });
   const w = word.toLowerCase().trim();
@@ -1749,7 +1775,7 @@ app.post("/api/admin/blocklist", adminLimiter, requireAdminToken, express.json()
   res.json({ ok: true, blocklist: dynamicBlocklist });
 });
 
-app.delete("/api/admin/blocklist/:word", adminLimiter, requireAdminToken, (req, res) => {
+app.delete("/api/admin/blocklist/:word", adminLimiter, requireAdminJWT, (req, res) => {
   const w = decodeURIComponent(req.params.word).toLowerCase().trim();
   dynamicBlocklist = dynamicBlocklist.filter(p => p !== w);
   saveBlocklist(dynamicBlocklist);
