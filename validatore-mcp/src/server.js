@@ -4,12 +4,44 @@
 
 import express from 'express';
 import fetch from 'node-fetch';
+import { promises as dns } from 'dns';
 import { validateCSV } from './validator.js';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
 const PORT = process.env.PORT || 3002;
+
+// ─── Anti-SSRF (allineato al backend) ────────────────────────────────────────
+function isPrivateOrDangerous(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    if (!['http:', 'https:'].includes(u.protocol)) return true;
+    const host = u.hostname.toLowerCase();
+    const blocked = [/^localhost$/, /^127\./, /^10\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^::1$/, /^0\.0\.0\.0$/, /^169\.254\./, /^metadata\./, /^fd[0-9a-f]{2}:/i];
+    return blocked.some(r => r.test(host));
+  } catch { return true; }
+}
+async function isResolvedIpSafe(hostname) {
+  try {
+    const { address: ip } = await dns.lookup(hostname);
+    const blocked = [/^127\./, /^10\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^::1$/, /^0\.0\.0\.0$/, /^169\.254\./];
+    return !blocked.some(r => r.test(ip));
+  } catch { return false; }
+}
+async function safeFetch(rawUrl, opts = {}, maxRedirects = 4) {
+  let cur = rawUrl;
+  for (let i = 0; i <= maxRedirects; i++) {
+    if (isPrivateOrDangerous(cur)) throw new Error('URL non consentito.');
+    let host; try { host = new URL(cur).hostname; } catch { throw new Error('URL non valido.'); }
+    if (!(await isResolvedIpSafe(host))) throw new Error('URL non consentito (target non sicuro).');
+    const resp = await fetch(cur, { ...opts, redirect: 'manual' });
+    const loc = resp.headers.get('location');
+    if (resp.status >= 300 && resp.status < 400 && loc) { cur = new URL(loc, cur).toString(); continue; }
+    return resp;
+  }
+  throw new Error('Troppi redirect.');
+}
 
 // ─── Definizione tool MCP ─────────────────────────────────────────────────────
 
@@ -75,11 +107,11 @@ async function handleToolCall(name, args) {
 
     if (args.csv_url) {
       try {
-        const resp = await fetch(args.csv_url, { headers: { 'User-Agent': 'validatore-mcp/1.0' } });
-        if (!resp.ok) return `Errore nel download del CSV: HTTP ${resp.status} — ${args.csv_url}`;
+        const resp = await safeFetch(args.csv_url, { headers: { 'User-Agent': 'validatore-mcp/1.0' } });
+        if (!resp.ok) return `Errore nel download del CSV: HTTP ${resp.status}`;
         raw = await resp.text();
       } catch (e) {
-        return `Impossibile scaricare il CSV da ${args.csv_url}: ${e.message}`;
+        return `Impossibile scaricare il CSV dall'URL fornito.`;
       }
     } else if (args.csv_text) {
       raw = args.csv_text;

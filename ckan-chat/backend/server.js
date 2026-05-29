@@ -214,6 +214,22 @@ async function isResolvedIpSafe(hostname) {
   } catch { return false; }
 }
 
+// Fetch SSRF-safe: rivalida URL+IP a OGNI hop di redirect (no bypass open-redirect),
+// blocca IP privati/interni; errori generici (no info-leak rete interna).
+async function safeFetch(rawUrl, opts = {}, maxRedirects = 4) {
+  let cur = rawUrl;
+  for (let i = 0; i <= maxRedirects; i++) {
+    if (isPrivateOrDangerous(cur)) throw new Error("URL non consentito.");
+    let host; try { host = new URL(cur).hostname; } catch { throw new Error("URL non valido."); }
+    if (!(await isResolvedIpSafe(host))) throw new Error("URL non consentito (target non sicuro).");
+    const resp = await fetch(cur, { ...opts, redirect: "manual" });
+    const loc = resp.headers.get("location");
+    if (resp.status >= 300 && resp.status < 400 && loc) { cur = new URL(loc, cur).toString(); continue; }
+    return resp;
+  }
+  throw new Error("Troppi redirect.");
+}
+
 // ─── Rate limiting globale ────────────────────────────────────────────────────
 // Load test bypass: LOADTEST_BYPASS_IP controlla se saltare i rate limiter.
 // Valori supportati:
@@ -1308,10 +1324,9 @@ app.post("/api/validate", strictLimiter, async (req, res) => {
     }
     let downloadHttpStatus = null;
     if (!csv_text) try {
-      const csvResp = await fetch(url, {
+      const csvResp = await safeFetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept": "text/csv,text/plain,application/csv,*/*" },
         signal: AbortSignal.timeout(15000),
-        redirect: "follow",
       });
       if (csvResp.ok) {
         // Controlla Content-Length prima di scaricare
@@ -1456,21 +1471,46 @@ app.post("/api/enrich", strictLimiter, async (req, res) => {
   if (ipa && !/^[a-z0-9_]{1,20}$/i.test(ipa)) return res.status(400).json({ error: "Codice IPA non valido." });
   console.log(`[enrich] url=${url || "upload"} ipa=${ipa} pa=${pa}`);
   try {
-    let csvUrl = url;
+    // [SSRF A2] Sia upload che URL passano per un tmp INTERNO: rdf-mcp/worker.js
+    // non scarica mai URL esterni. In modalita' URL il download lo fa il backend
+    // con safeFetch (blocca redirect verso host/IP interni).
+    let csvUrl = null;
     let tempId = null;
-    if (csv_text) {
-      // Salva CSV come file temporaneo accessibile a rdf-mcp via URL interno
-      tempId = `csv_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      tempCsvFiles.set(tempId, csv_text);
-      // rdf-mcp chiama il backend per scaricare il CSV
-      csvUrl = `http://backend:3001/tmp-csv/${tempId}`;
-      setTimeout(() => tempCsvFiles.delete(tempId), 120000); // cleanup dopo 2 min
+    let csvData = csv_text || null;
+    if (!csvData && url) {
+      let dl;
+      try {
+        dl = await safeFetch(url, {
+          headers: { "User-Agent": "Mozilla/5.0", "Accept": "text/csv,text/plain,application/csv,*/*" },
+          signal: AbortSignal.timeout(15000),
+        });
+      } catch { return res.status(400).json({ error: "URL non consentito." }); }
+      if (!dl.ok) return res.status(502).json({ error: "Impossibile scaricare il CSV dall'URL fornito." });
+      csvData = await dl.text();
+      if (Buffer.byteLength(csvData, "utf8") > 10 * 1024 * 1024) return res.status(413).json({ error: "File CSV troppo grande (max 10MB)." });
     }
+    if (!csvData || !csvData.trim()) return res.status(422).json({ error: "CSV vuoto." });
+    tempId = `csv_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    tempCsvFiles.set(tempId, csvData);
+    csvUrl = `http://backend:3001/tmp-csv/${tempId}`;
+    setTimeout(() => tempCsvFiles.delete(tempId), 120000); // cleanup dopo 2 min
     const params = new URLSearchParams({ url: csvUrl, ipa: ipa || "ente", pa: pa || "Ente Pubblico", fmt: fmt || "ttl" });
     const t0enrich = Date.now();
-    const rdfRes = await fetch(`${RDF_MCP_URL}/?${params}`, { signal: AbortSignal.timeout(60000) });
-    const text = await rdfRes.text();
+    const rdfRes = await fetch(`${RDF_MCP_URL}/?${params}`, { signal: AbortSignal.timeout(20000) });
+    let text = await rdfRes.text();
     if (!rdfRes.ok) return res.status(rdfRes.status).json({ error: text });
+    // Cap dimensione output RDF (anti-amplificazione DoS): max 10MB
+    const MAX_RDF_BYTES = 10 * 1024 * 1024;
+    if (Buffer.byteLength(text, "utf8") > MAX_RDF_BYTES) {
+      emitEvent("error", { error_type: "enrich_oversize", error_message: "output " + Buffer.byteLength(text, "utf8") + " > " + MAX_RDF_BYTES, endpoint: "/api/enrich" }, req);
+      return res.status(413).json({ error: "Output RDF troppo grande (limite 10MB)." });
+    }
+    // Pulizia intestazione RDF: rimuove attribuzione e maschera URL interno (no info-leak)
+    text = text
+      .split("\n")
+      .filter(l => !/^#\s*https?:\/\/piersoft\.github\.io\/CSV-to-RDF/i.test(l))
+      .map(l => l.replace(/^(#\s*Sorgente:\s*).*backend:3001\/tmp-csv\/\S*.*$/i, "$1caricamento utente"))
+      .join("\n");
     // dataset_id: usa URL se disponibile, altrimenti nome PA, altrimenti ipa
     // Titolo leggibile: se il nome file è generico (exp.aspx, export.csv, data.csv...)
     // lo arricchiamo con il dominio per dare contesto (es. "statweb.provincia.tn.it — exp.aspx")
@@ -1678,18 +1718,19 @@ app.get("/api/health", rateLimit({ windowMs: 60000, max: 10, message: { error: "
     const r = await fetch(`${GUARDRAIL_URL}/health`, { signal: AbortSignal.timeout(3000) });
     status.guardrail = r.ok ? "ok" : "error";
   } catch { status.guardrail = "error"; }
-  res.json(status);
+  // [VA-03] risposta pubblica minimale: nessuna topologia interna (solo ok/degraded)
+  const allUp = Object.values(status).every(v => v !== "error");
+  res.json({ status: allUp ? "ok" : "degraded" });
 });
 
 const PORT = process.env.PORT || 3001;
 // ─── Controllo Content-Type prima della validazione ──────────────────────────
 async function checkCsvContentType(url) {
   try {
-    const r = await fetch(url, {
+    const r = await safeFetch(url, {
       method: "HEAD",
       headers: { "User-Agent": "Mozilla/5.0", "Accept": "text/csv,text/plain,application/csv,*/*" },
       signal: AbortSignal.timeout(8000),
-      redirect: "follow",
     });
     const ct = (r.headers.get("content-type") || "").toLowerCase();
     const cd = (r.headers.get("content-disposition") || "").toLowerCase();
@@ -1798,8 +1839,8 @@ app.get("/api/preview-csv", async (req, res) => {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), PREVIEW_TIMEOUT_MS);
-    const r = await fetch(url, {
-      signal: ctrl.signal, redirect: "follow",
+    const r = await safeFetch(url, {
+      signal: ctrl.signal,
       headers: { "User-Agent": "SIMBA-preview/1.0" },
     });
     clearTimeout(t);

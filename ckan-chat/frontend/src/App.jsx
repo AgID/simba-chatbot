@@ -207,7 +207,7 @@ export default function App() {
     try {
       const r = await fetch(`${BACKEND_URL}/api/health`);
       setHealth(await r.json());
-    } catch { setHealth({ backend: "error", ollama: "error", mcp: "error" }); }
+    } catch { setHealth({ status: "error" }); }
   }
 
   // ── Classifica intenzione (Ollama, 1 token) ──────────────────────────────
