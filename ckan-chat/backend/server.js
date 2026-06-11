@@ -177,7 +177,7 @@ app.use(cors({
   methods: ["GET", "POST"],
 }));
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "30mb" }));
 
 // [SECURITY VA-03] Header di sicurezza gestiti UNICAMENTE da nginx (single source):
 // rimossi HSTS/CSP/XFO/XCTO duplicati dall'app (evita header doppi/ambigui su /api/*).
@@ -1326,7 +1326,7 @@ app.post("/api/validate", strictLimiter, async (req, res) => {
     if (!csv_text) try {
       const csvResp = await safeFetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", "Accept": "text/csv,text/plain,application/csv,*/*" },
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(30000),
       });
       if (csvResp.ok) {
         // Controlla Content-Length prima di scaricare
@@ -1482,7 +1482,7 @@ app.post("/api/enrich", strictLimiter, async (req, res) => {
       try {
         dl = await safeFetch(url, {
           headers: { "User-Agent": "Mozilla/5.0", "Accept": "text/csv,text/plain,application/csv,*/*" },
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(30000),
         });
       } catch { return res.status(400).json({ error: "URL non consentito." }); }
       if (!dl.ok) return res.status(502).json({ error: "Impossibile scaricare il CSV dall'URL fornito." });

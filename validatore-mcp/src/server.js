@@ -8,7 +8,7 @@ import { promises as dns } from 'dns';
 import { validateCSV } from './validator.js';
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '30mb' }));
 
 const PORT = process.env.PORT || 3002;
 
