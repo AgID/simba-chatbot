@@ -172,6 +172,27 @@ export default function App() {
   function endTour() { setTourActive(false); setTourStep(-1); }
   function skipTourForever() { localStorage.setItem("simba_tour_done", "1"); endTour(); }
 
+  // ── a11y: focus management + focus-trap + ESC per il dialog tour (WCAG 4.1.2) ──
+  useEffect(() => {
+    if (tourActive) {
+      tourTriggerRef.current = document.activeElement;
+      requestAnimationFrame(() => { tourBubbleRef.current?.focus(); });
+    } else if (tourTriggerRef.current && typeof tourTriggerRef.current.focus === "function") {
+      tourTriggerRef.current.focus();
+      tourTriggerRef.current = null;
+    }
+  }, [tourActive]);
+
+  function handleTourKeyDown(e) {
+    if (e.key === "Escape") { e.preventDefault(); endTour(); return; }
+    if (e.key !== "Tab") return;
+    const f = tourBubbleRef.current?.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])');
+    if (!f || !f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+
   // [SECURITY VA-03] caricamento blocklist client rimosso (era disclosure guardrail).
   const [wizardDove,  setWizardDove]  = useState("");
   const [doveAcList,  setDoveAcList]  = useState([]);
@@ -190,6 +211,8 @@ export default function App() {
   const bottomRef   = useRef(null);
   const resultsHeadingRef = useRef(null);
   const prevLoadingRef    = useRef(false);
+  const tourBubbleRef     = useRef(null);
+  const tourTriggerRef    = useRef(null);
   const csvFileRef   = useRef(null);
   const advResetRef  = useRef(null);
   const ttlFileRef   = useRef(null);
@@ -1619,7 +1642,7 @@ SELECT ?ipaCode WHERE {
                 width: rect.width + 24, height: rect.height + 24,
               }} />
             )}
-            <div className="tour-bubble" style={(() => {
+            <div className="tour-bubble" role="dialog" aria-modal="true" aria-labelledby="tour-title-current" tabIndex={-1} ref={tourBubbleRef} onKeyDown={handleTourKeyDown} style={(() => {
               const isMobile = window.innerWidth < 600;
               if (!rect) return { top: "50%", left: "50%", transform: "translate(-50%,-50%)" };
               // Su mobile: bubble centrata in alto per step "above", in basso per gli altri
@@ -1649,7 +1672,7 @@ SELECT ?ipaCode WHERE {
               };
             })()}>
               <div className="tour-step-counter">{tourStep + 1} / {TOUR_STEPS.length}</div>
-              <h3 className="tour-title">{step.title}</h3>
+              <h3 className="tour-title" id="tour-title-current">{step.title}</h3>
               <p className="tour-text">{step.text}</p>
               <div className="tour-actions">
                 <button className="tour-btn-skip" onClick={skipTourForever}>Non mostrare più</button>
