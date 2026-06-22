@@ -331,12 +331,12 @@ export default function AdvancedSearch({ onResults, onLoading, onLoadingMsg, onR
 
   return (
     <div className="adv-container">
-      <button id="tour-advanced" className="adv-toggle-btn" onClick={() => setOpen(v => !v)}>
+      <button id="tour-advanced" className="adv-toggle-btn" onClick={() => setOpen(v => !v)} aria-expanded={open} aria-controls="adv-panel">
         ⚙️ Ricerca avanzata {open ? "▲" : "▼"}
       </button>
 
       {open && (
-        <div className="adv-panel">
+        <div className="adv-panel" id="adv-panel">
           <div className="adv-grid">
             <div className="adv-field">
               <label>Parole chiave</label>

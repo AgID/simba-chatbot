@@ -1358,6 +1358,7 @@ SELECT ?ipaCode WHERE {
 
   return (
     <div className="app">
+      <a href="#main-content" className="skip-link">Salta al contenuto</a>
       {showPrivacy && (
         <div className="privacy-banner">
           <span>
@@ -1374,7 +1375,7 @@ SELECT ?ipaCode WHERE {
       <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Apri menu strumenti">☰</button>
       <div className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
 
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} role="navigation" aria-label="Strumenti">
         <div className="sidebar-logo">
           <a href="https://www.agid.gov.it/it" target="_blank" rel="noopener noreferrer" aria-label="Sito istituzionale AgID (apre in nuova scheda)">
             <img src="/chatbot/logo-agid.png" alt="AgID — Agenzia per l'Italia Digitale" className="sidebar-agid-logo" />
@@ -1429,7 +1430,7 @@ SELECT ?ipaCode WHERE {
 
         <StatusBar health={health} onRefresh={fetchHealth} compact />
 
-        <div className="sidebar-github">
+        <footer className="sidebar-github">
           <a href="https://github.com/AgID/simba-chatbot"
              target="_blank" rel="noopener noreferrer"
              aria-label="Codice sorgente su GitHub">
@@ -1447,10 +1448,10 @@ SELECT ?ipaCode WHERE {
              style={{ marginLeft: '12px' }}>
             Dichiarazione accessibilità
           </a>
-        </div>
+        </footer>
       </aside>
 
-      <main className="chat-area">
+      <main className="chat-area" id="main-content">
         <div className="messages">
           {messages.length === 0 && (
             <div className="welcome">
