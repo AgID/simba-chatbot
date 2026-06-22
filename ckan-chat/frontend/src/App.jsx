@@ -1392,11 +1392,11 @@ SELECT ?ipaCode WHERE {
              style={{ marginLeft: '12px' }}>
             Informazioni
           </a>
-          <a href="https://cruscotto-italia.dati.gov.it/accessibilita.html"
+          <a href="https://form.agid.gov.it/agid/SIMBA_-_Open_Data_Chatbot/dichiarazione"
              target="_blank" rel="noopener noreferrer"
-             aria-label="Dichiarazione di accessibilità (apre in nuova scheda)"
+             aria-label="Dichiarazione accessibilità (apre in nuova scheda)"
              style={{ marginLeft: '12px' }}>
-            Accessibilità
+            Dichiarazione accessibilità
           </a>
         </div>
       </aside>
