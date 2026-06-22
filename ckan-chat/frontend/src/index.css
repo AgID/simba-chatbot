@@ -417,6 +417,16 @@ body {
   min-width: 0;
 }
 
+/* a11y: intestazione risultati focusabile (Fix 2.4.3) — resa identica al <p> precedente */
+.results-heading {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  margin: 0 0 0.5em 0;
+}
+.results-heading:focus { outline: none; }
+.results-heading:focus-visible { outline: 2px solid var(--focus, #0066CC); outline-offset: 2px; }
+
 .message.user .message-bubble {
   background: var(--primary);
   color: white;

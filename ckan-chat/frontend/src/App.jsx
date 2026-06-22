@@ -4,7 +4,7 @@
  * Repo: https://github.com/AgID/simba-chatbot
  * Licenza: MIT
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import StatusBar from "./components/StatusBar";
 import DatasetCard from "./components/DatasetCard";
 import ValidateReport from "./components/ValidateReport";
@@ -188,6 +188,8 @@ export default function App() {
   const [showCsvBox,  setShowCsvBox]  = useState(false);
 
   const bottomRef   = useRef(null);
+  const resultsHeadingRef = useRef(null);
+  const prevLoadingRef    = useRef(false);
   const csvFileRef   = useRef(null);
   const advResetRef  = useRef(null);
   const ttlFileRef   = useRef(null);
@@ -196,6 +198,26 @@ export default function App() {
   useEffect(() => { fetchHealth(); }, []);
   useEffect(() => { document.title = `SIMBA · ${pageTitle}`; }, [pageTitle]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+
+  // ── a11y: sposta il focus sull'intestazione risultati a fine ricerca ────────
+  useEffect(() => {
+    if (prevLoadingRef.current && !loading && resultsHeadingRef.current) {
+      resultsHeadingRef.current.focus();
+    }
+    prevLoadingRef.current = loading;
+  }, [loading]);
+
+  // ── a11y: testo per regione role="status" (annuncio stato ricerca) ──────────
+  const statusAnnounce = useMemo(() => {
+    if (loading) return "Ricerca in corso…";
+    const last = [...messages].reverse().find(m =>
+      m.type === "search_results" || (m.role === "assistant" && /Trovati \*\*\d+/.test(m.content || "")));
+    if (last) {
+      const mm = (last.content || "").match(/Trovati \*\*(\d+)\*\*(?:\s+di\s+\*\*([\d.]+)\*\*)?/);
+      if (mm) return mm[2] ? `${mm[1]} risultati trovati su ${mm[2]} totali` : `${mm[1]} risultati trovati`;
+    }
+    return "";
+  }, [messages, loading]);
   useEffect(() => {
     if (!sidebarOpen) return;
     const h = (e) => { if (!e.target.closest(".sidebar")) setSidebarOpen(false); };
@@ -1215,10 +1237,14 @@ SELECT ?ipaCode WHERE {
   // ── Render messaggio ──────────────────────────────────────────────────────
   function renderMessage(m, i) {
     if (m.type === "search_results") {
+      const isLastResults = !messages.slice(i + 1).some(x => x.type === "search_results");
       return (
         <div key={i} className="message assistant">
           <div className="message-bubble">
-            <p dangerouslySetInnerHTML={{ __html: mdToHtml(m.content) }} />
+            <h2 className="results-heading"
+                ref={isLastResults ? resultsHeadingRef : null}
+                tabIndex={-1}
+                dangerouslySetInnerHTML={{ __html: mdToHtml(m.content) }} />
             <div className="dataset-list">
               {m.datasets.map((d, j) => (
                 <DatasetCard key={j} dataset={d} onValidate={validateFromCard} onEnrich={doEnrich} searchTerms={(m.query || "").replace(/['‘’`]/g," ").split(/\s+/).filter(w=>w.length>2)} />
