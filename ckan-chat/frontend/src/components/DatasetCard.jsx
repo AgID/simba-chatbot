@@ -361,20 +361,19 @@ export default function DatasetCard({ dataset, onValidate, onEnrich, searchTerms
   const otherDists = (distributions || []).filter(d => !CSV_FMTS.has(d.format));
 
   return (
-    <article className="dataset-card" aria-label={dataset.title}>
-      <div className="dataset-card-header" onClick={toggleExpand} role="button" tabIndex={0} aria-expanded={expanded} aria-label={`${expanded ? "Nascondi" : "Espandi"} risorse: ${dataset.title}`} onKeyDown={e => e.key === "Enter" && toggleExpand()}>
-        <div className="dataset-card-title">
-          <a href={dataset.viewUrl} target="_blank" rel="noopener noreferrer" aria-label={`Apri dataset: ${dataset.title}`}
-             onClick={e => e.stopPropagation()}>
+    <article className="dataset-card" role="listitem" aria-label={dataset.title}>
+      <div className="dataset-card-header">
+        <h3 className="dataset-card-title">
+          <a href={dataset.viewUrl} target="_blank" rel="noopener noreferrer" aria-label={`Apri dataset: ${dataset.title}`}>
             {searchTerms.length > 0 ? highlight(dataset.title, searchTerms) : dataset.title}
           </a>
-        </div>
-        <span className="dataset-card-toggle" aria-hidden="true">
+        </h3>
+        <button type="button" className="dataset-card-toggle" onClick={toggleExpand} aria-expanded={expanded} aria-label={`${expanded ? "Nascondi" : "Espandi"} risorse: ${dataset.title}`}>
           {expanded
-            ? <><i className="bi bi-chevron-up"/> Nascondi risorse</>
-            : <><i className="bi bi-chevron-down"/> Vedi risorse</>
+            ? <><i className="bi bi-chevron-up" aria-hidden="true"/> Nascondi risorse</>
+            : <><i className="bi bi-chevron-down" aria-hidden="true"/> Vedi risorse</>
           }
-        </span>
+        </button>
       </div>
 
       <div className="dataset-card-meta">

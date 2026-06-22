@@ -1245,7 +1245,7 @@ SELECT ?ipaCode WHERE {
                 ref={isLastResults ? resultsHeadingRef : null}
                 tabIndex={-1}
                 dangerouslySetInnerHTML={{ __html: mdToHtml(m.content) }} />
-            <div className="dataset-list">
+            <div className="dataset-list" role="list">
               {m.datasets.map((d, j) => (
                 <DatasetCard key={j} dataset={d} onValidate={validateFromCard} onEnrich={doEnrich} searchTerms={(m.query || "").replace(/['‘’`]/g," ").split(/\s+/).filter(w=>w.length>2)} />
               ))}
@@ -1357,7 +1357,7 @@ SELECT ?ipaCode WHERE {
             <img src="/chatbot/logo-agid.png" alt="AgID — Agenzia per l'Italia Digitale" className="sidebar-agid-logo" />
           </a>
           <div className="sidebar-agid-title">
-            <span className="sidebar-agid-name">SIMBA <span className="sidebar-beta-tag">BETA</span></span>
+            <h1 className="sidebar-agid-name">SIMBA <span className="sidebar-beta-tag">BETA</span></h1>
             <span className="sidebar-agid-sub">Open Data · dati.gov.it</span>
           </div>
         </div>
@@ -1576,7 +1576,7 @@ SELECT ?ipaCode WHERE {
               <Icon name="x-lg" size={14} />
             </button>
 
-            <h4><Icon name="search" size={14} /> Cerca dataset</h4>
+            <h3><Icon name="search" size={14} /> Cerca dataset</h3>
             <p>Usa i due campi separati per risultati più precisi:</p>
             <ul>
               <li><strong>COSA</strong>: l'argomento che ti interessa — es. <em>«statistiche demografiche»</em>, <em>«rifiuti»</em>, <em>«defibrillatori»</em></li>
@@ -1585,7 +1585,7 @@ SELECT ?ipaCode WHERE {
             <p>Puoi anche incollare direttamente il titolo esatto di un dataset nel campo COSA.</p>
             <p className="help-warn"><Icon name="exclamation-triangle" size={12} /> Il sistema risponde solo a domande sugli open data PA italiani. Saluti, domande generiche e argomenti non pertinenti vengono ignorati.</p>
 
-            <h4><Icon name="check2-circle" size={14} /> Valida CSV</h4>
+            <h3><Icon name="check2-circle" size={14} /> Valida CSV</h3>
             <p>Clicca <strong>Valida CSV</strong> nella sidebar, poi scegli:</p>
             <ul>
               <li><strong>Da URL</strong> — incolla il link diretto al file CSV (anche Google Sheets)</li>
@@ -1593,7 +1593,7 @@ SELECT ?ipaCode WHERE {
             </ul>
             <p>Il validatore controlla struttura, contenuto, qualità open data e linked data secondo le linee guida AgID. Punteggio da 0 a 100.</p>
 
-            <h4><Icon name="diagram-3" size={14} /> Converti in RDF TTL/XML</h4>
+            <h3><Icon name="diagram-3" size={14} /> Converti in RDF TTL/XML</h3>
             <p>Clicca <strong>Trasforma in RDF TTL/XML</strong> nella sidebar, poi:</p>
             <ul>
               <li>Scegli il formato: <strong>RDF/Turtle (.ttl)</strong> o <strong>RDF/XML (.rdf)</strong></li>
@@ -1649,7 +1649,7 @@ SELECT ?ipaCode WHERE {
               };
             })()}>
               <div className="tour-step-counter">{tourStep + 1} / {TOUR_STEPS.length}</div>
-              <h4 className="tour-title">{step.title}</h4>
+              <h3 className="tour-title">{step.title}</h3>
               <p className="tour-text">{step.text}</p>
               <div className="tour-actions">
                 <button className="tour-btn-skip" onClick={skipTourForever}>Non mostrare più</button>
