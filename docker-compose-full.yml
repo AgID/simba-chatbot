@@ -30,6 +30,10 @@ services:
       - ollama_data:/root/.ollama
     environment:
       OLLAMA_KEEP_ALIVE: 24h
+      # KV-cache q8_0 (quasi-lossless) + flash attention: dimezza la memoria
+      # del KV-cache per slot, NON tocca i pesi del modello. Abilita parallelismo.
+      OLLAMA_FLASH_ATTENTION: ${OLLAMA_FLASH_ATTENTION:-1}
+      OLLAMA_KV_CACHE_TYPE: ${OLLAMA_KV_CACHE_TYPE:-q8_0}
       # Numero di richieste concorrenti gestite in parallelo da Ollama.
       # Ogni slot aggiunge ~500MB RAM. Vincolo CPU: modelli piccoli (0.5b) usano
       # 1 core/slot, modelli grandi (1.7b+) possono saturare tutti i core anche
