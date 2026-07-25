@@ -526,6 +526,12 @@ body {
   padding: 6px 0;
   word-break: break-word;
 }
+
+.wizard-input:focus-visible {
+  outline: 2px solid #0066CC;
+  outline-offset: 2px;
+  border-color: #0066CC;
+}
 .chat-input::placeholder { color: var(--text3); }
 
 .send-btn {

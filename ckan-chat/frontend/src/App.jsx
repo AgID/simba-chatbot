@@ -1376,7 +1376,7 @@ SELECT ?ipaCode WHERE {
       <div className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
 
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`} role="navigation" aria-label="Strumenti">
-        <div className="sidebar-logo">
+        <div className="sidebar-logo" role="banner">
           <a href="https://www.agid.gov.it/it" target="_blank" rel="noopener noreferrer" aria-label="Sito istituzionale AgID (apre in nuova scheda)">
             <img src="/chatbot/logo-agid.png" alt="AgID — Agenzia per l'Italia Digitale" className="sidebar-agid-logo" />
           </a>
@@ -1452,7 +1452,10 @@ SELECT ?ipaCode WHERE {
       </aside>
 
       <main className="chat-area" id="main-content">
-        <div className="messages">
+        <div role="status" aria-live="polite" style={{ position:"absolute", width:1, height:1, padding:0, margin:-1, overflow:"hidden", clip:"rect(0,0,0,0)", whiteSpace:"nowrap", border:0 }}>
+          {statusAnnounce}
+        </div>
+        <div className="messages" role="log" aria-live="polite" aria-atomic="false" aria-relevant="additions text">
           {messages.length === 0 && (
             <div className="welcome">
               <h2>SIMBA <span className="home-beta-tag">BETA</span></h2>
