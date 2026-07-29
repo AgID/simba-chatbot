@@ -26,6 +26,7 @@ build/
 # Backup e temp
 *.bak
 *.bak-*
+*.backup
 *.tmp
 *.swp
 *~
