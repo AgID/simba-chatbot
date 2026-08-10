@@ -27,6 +27,7 @@ build/
 *.bak
 *.bak-*
 *.backup
+*.prima-*
 *.tmp
 *.swp
 *~
