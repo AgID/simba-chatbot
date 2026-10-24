@@ -19,7 +19,7 @@ services:
 
   # ── Ollama locale (solo se usi --profile ollama-local) ──────────────────────
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.10
     container_name: ollama
     restart: unless-stopped
     profiles:
@@ -56,7 +56,7 @@ services:
 
   # ── Ollama model puller (solo con profile ollama-local) ─────────────────────
   ollama-pull:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.10
     container_name: ollama-pull
     profiles:
       - ollama-local
